@@ -59,7 +59,7 @@ foreach($line in $csvlines)
 	$restresp = Invoke-RestMethod -Uri $url -MaximumRedirection 0 -ErrorAction Ignore
 	$argDevices = $restresp.devices.item
 
-	#Find the Group ID for a given Airgas region
+	#Find the Group ID for the given Airgas region
 	$subGroupId = ($argGroups | Where {$_.name -eq $subgroup}).objid;
 
 	# Check if site group already exists.
@@ -67,7 +67,8 @@ foreach($line in $csvlines)
 	if(($argGroups | Where {$_.name -eq $siteName}) -eq $null)
 	{
 		# If not create it by duplicating the site group template
-		$url = "https://$PRTGHost/api/duplicateobject.htm?id=$siteTemplateID&name=$siteName&targetid=$subGroupID&$auth"
+		$siteNameEncoded = [uri]::EscapeDataString($siteName)
+		$url = "https://$PRTGHost/api/duplicateobject.htm?id=$siteTemplateID&name=$siteNameEncoded&targetid=$subGroupID&$auth"
 		$request = Invoke-WebRequest -Uri $url -MaximumRedirection 0 -ErrorAction Ignore;
 		$siteID = $request.Headers.Location.Split("=")[1]
 	}
@@ -82,7 +83,8 @@ foreach($line in $csvlines)
 	if(($argDevices | Where {$_.device -eq $routerName}) -eq $null)
 	{
 		# If not create it by duplicating the device template
-		$url = "https://$PRTGHost/api/duplicateobject.htm?id=$routerTemplateID&name=$routerName&targetid=$siteID&$auth"
+		$routerNameEncoded =  [uri]::EscapeDataString($routerName)
+		$url = "https://$PRTGHost/api/duplicateobject.htm?id=$routerTemplateID&name=$routerNameEncoded&targetid=$siteID&$auth"
 		$request = Invoke-WebRequest -Uri $url -MaximumRedirection 0 -ErrorAction Ignore;
 		$deviceID = $request.Headers.Location.Split("=")[1]
 
@@ -107,12 +109,14 @@ foreach($line in $csvlines)
 		$interfacenumber="";
 		if($ifAlias -eq $null)
 		{
-			$interfacenumber = "$IfIndex`:"
+			$interfacenumber = "$ifIndex`:"
 	    }
 		else
 		{
-			$interfacenumber = "$IfIndex`:$IfAlias"
+			$ifAliasEncoded =  [uri]::EscapeDataString($ifAlias)
+			$interfacenumber = "$ifIndex`:$ifAliasEncoded"
 		}
+
 		$url = "https://$PRTGHost/api/setobjectproperty.htm?id=$snmpID&name=interfacenumber&value=$interfacenumber&$auth" 
         $request = Invoke-WebRequest -Uri $url -MaximumRedirection 0 -ErrorAction Ignore
 
