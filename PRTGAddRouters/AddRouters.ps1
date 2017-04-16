@@ -26,8 +26,8 @@ $PRTGHost = "172.31.230.79"
 
 $siteTemplateID = "10019";
 $routerTemplateID = "10020";
-$pingSensorTemplateID = "2579";
-$snmpSensorTemplateID = "2578";
+$pingSensorTemplateID = "2578";
+$snmpSensorTemplateID = "2579";
 
 #Parent group id for Airgas sites
 $StartingID=10023
@@ -35,16 +35,6 @@ $StartingID=10023
 #############################
 # END INSTANCE SPECIFIC VARIABLES
 #############################
-
-#Retrieve list of groups in the airgas group
-$url = "https://$PRTGHost/api/table.xml?content=groups&output=xml&columns=objid,group,name,parentid&count=2500&id=$StartingID&$auth"
-$restresp = Invoke-RestMethod -Uri $url -MaximumRedirection 0 -ErrorAction Ignore
-$argGroups = $restresp.groups.item
-
-#Retrieve list of devices in the airgas group
-$url = "https://$PRTGHost/api/table.xml?content=devices&output=xml&columns=objid,group,device,host&count=2500&id=$StartingID&$auth"
-$restresp = Invoke-RestMethod -Uri $url -MaximumRedirection 0 -ErrorAction Ignore
-$argDevices = $restresp.devices.item
 
 #Find the group id for a given airgas region
 ($argGroups | Where {$_.name -eq "East"}).objid
@@ -59,6 +49,16 @@ foreach($line in $csvlines)
 	$ifIndex=$line.IfIndex;
 	$ifAlias=$line.IfAlias;
 
+	#Retrieve list of groups in the airgas group
+	$url = "https://$PRTGHost/api/table.xml?content=groups&output=xml&columns=objid,group,name,parentid&count=2500&id=$StartingID&$auth"
+	$restresp = Invoke-RestMethod -Uri $url -MaximumRedirection 0 -ErrorAction Ignore
+	$argGroups = $restresp.groups.item
+
+	#Retrieve list of devices in the airgas group
+	$url = "https://$PRTGHost/api/table.xml?content=devices&output=xml&columns=objid,group,device,host&count=2500&id=$StartingID&$auth"
+	$restresp = Invoke-RestMethod -Uri $url -MaximumRedirection 0 -ErrorAction Ignore
+	$argDevices = $restresp.devices.item
+
 	#Find the Group ID for a given Airgas region
 	$subGroupId = ($argGroups | Where {$_.name -eq $subgroup}).objid;
 
@@ -67,8 +67,8 @@ foreach($line in $csvlines)
 	if(($argGroups | Where {$_.name -eq $siteName}) -eq $null)
 	{
 		# If not create it by duplicating the site group template
-		$url = "http://$PRTGHost/api/duplicateobject.htm?id=$siteTemplateID&name=$siteName&targetid=$subGroupID&$auth"
-		$request = Invoke-RestMethod -Uri $url -MaximumRedirection 0 -ErrorAction Ignore;
+		$url = "https://$PRTGHost/api/duplicateobject.htm?id=$siteTemplateID&name=$siteName&targetid=$subGroupID&$auth"
+		$request = Invoke-WebRequest -Uri $url -MaximumRedirection 0 -ErrorAction Ignore;
 		$siteID = $request.Headers.Location.Split("=")[1]
 	}
 	else
@@ -82,25 +82,21 @@ foreach($line in $csvlines)
 	if(($argDevices | Where {$_.device -eq $routerName}) -eq $null)
 	{
 		# If not create it by duplicating the device template
-		$url = "http://$PRTGHost/api/duplicateobject.htm?id=$routerTemplateID&name=$routerName&targetid=$siteID&$auth"
-		$request = Invoke-RestMethod -Uri $url -MaximumRedirection 0 -ErrorAction Ignore;
+		$url = "https://$PRTGHost/api/duplicateobject.htm?id=$routerTemplateID&name=$routerName&targetid=$siteID&$auth"
+		$request = Invoke-WebRequest -Uri $url -MaximumRedirection 0 -ErrorAction Ignore;
 		$deviceID = $request.Headers.Location.Split("=")[1]
 
 		#Set the router's IP
-		$url = "http://$PRTGHost/api/setobjectproperty.htm?id=$deviceID&name=host&value=$routerIP&$auth" 
+		$url = "https://$PRTGHost/api/setobjectproperty.htm?id=$deviceID&name=host&value=$routerIP&$auth" 
 		$request = Invoke-WebRequest -Uri $url -MaximumRedirection 0 -ErrorAction Ignore
 
 		# Add the ping sensor
-		$url = "http://$PRTGHost/api/duplicateobject.htm?id=$pingSensorTemplateID&targetid=$deviceID&$auth"
+		$url = "https://$PRTGHost/api/duplicateobject.htm?id=$pingSensorTemplateID&targetid=$deviceID&name=Ping&$auth"
 		$request = Invoke-WebRequest -Uri $url -MaximumRedirection 0 -ErrorAction Ignore
 		$pingID = $request.Headers.Location.Split("=")[1]
 
-		#Resume the ping sensor (it is created paused)
-		$url = "http://$PRTGHost/api/pause.htm?id=$pingID&action=1&$auth"
-        $request = Invoke-WebRequest -Uri $url -MaximumRedirection 0 -ErrorAction Ignore
-
 		# Add the snmp sensor
-        $url = "http://$PRTGHost/api/duplicateobject.htm?id=$snmpSensorTemplateID&targetid=$deviceID&$auth"
+        $url = "https://$PRTGHost/api/duplicateobject.htm?id=$snmpSensorTemplateID&targetid=$deviceID&name=WAN&$auth"
 		$request = Invoke-WebRequest -Uri $url -MaximumRedirection 0 -ErrorAction Ignore
 		$snmpID = $request.Headers.Location.Split("=")[1]
 
@@ -117,11 +113,23 @@ foreach($line in $csvlines)
 		{
 			$interfacenumber = "$IfIndex`:$IfAlias"
 		}
-		$url = "http://$PRTGHost/api/setobjectproperty.htm?id=$snmpID&name=interfacenumber&value=$interfacenumber&$auth" 
+		$url = "https://$PRTGHost/api/setobjectproperty.htm?id=$snmpID&name=interfacenumber&value=$interfacenumber&$auth" 
+        $request = Invoke-WebRequest -Uri $url -MaximumRedirection 0 -ErrorAction Ignore
+
+		#Resume the group (it is created paused)
+		$url = "https://$PRTGHost/api/pause.htm?id=$siteID&action=1&$auth"
+        $request = Invoke-WebRequest -Uri $url -MaximumRedirection 0 -ErrorAction Ignore
+		
+		#Resume the device (it is created paused)
+		$url = "https://$PRTGHost/api/pause.htm?id=$deviceID&action=1&$auth"
+        $request = Invoke-WebRequest -Uri $url -MaximumRedirection 0 -ErrorAction Ignore
+
+		#Resume the ping sensor (it is created paused)
+		$url = "https://$PRTGHost/api/pause.htm?id=$pingID&action=1&$auth"
         $request = Invoke-WebRequest -Uri $url -MaximumRedirection 0 -ErrorAction Ignore
 
 		#Resume the snmp sensor (it is created paused)
-		$url = "http://$PRTGHost/api/pause.htm?id=$snmpID&action=1&$auth"
+		$url = "https://$PRTGHost/api/pause.htm?id=$snmpID&action=1&$auth"
         $request = Invoke-WebRequest -Uri $url -MaximumRedirection 0 -ErrorAction Ignore
 	}
 }
